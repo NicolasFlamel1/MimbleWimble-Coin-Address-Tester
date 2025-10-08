@@ -2,7 +2,7 @@
 
 You can use this utility to test if a MimbleWimble Coin address is reachable by going [here](https://htmlpreview.github.io/?https://github.com/NicolasFlamel1/MimbleWimble-Coin-Address-Tester/blob/master/index.html). This utility supports testing HTTP, Tor, and MQS addresses.
 
-It's recommended that you use this utility with your web browser's CORS restrictions and mixed-content restrictions disabled so that it can successfully test addresses that don't provide responses with CORS headers or addresses that use an insecure protocol. [MQS addresses don't currently provide responses with CORS headers](https://github.com/mwcproject/mwcmqs/pull/1).
+It's recommended that you use this utility with your web browser's CORS restrictions and mixed-content restrictions disabled so that it can successfully test addresses that don't provide responses with CORS headers and addresses that use insecure protocols. [MQS addresses don't currently provide responses with CORS headers](https://github.com/mwcproject/mwcmqs/pull/1).
 
 On **Windows** you can open Chrome with its CORS restrictions and mixed-content restrictions disabled by running the following command in a command prompt:
 ```
