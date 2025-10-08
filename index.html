@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	
+	<script src="base58.js"></script>
+	<script src="BLAKE2b-0.0.2.js"></script>
+	<script src="ChaCha-2.1.0.js"></script>
+	<script src="js-sha256-0.10.0.js"></script>
+	<script src="secp256k1-zkp-0.0.29.js"></script>
+	
+	<script>
+	
+		// Use strict
+		"use strict";
+		
+		
+		// Main function
+		window.addEventListener("DOMContentLoaded", async function() {
+		
+			// Initialize BLAKE2b
+			await Blake2b.initialize();
+			
+			// Initialize secp256k1-zkp
+			await Secp256k1Zkp.initialize();
+			
+			// Get form
+			const form = document.querySelector("form");
+			
+			// Get alerts
+			const alerts = document.querySelector("div");
+			
+			// Get button
+			const button = document.querySelector("button");
+			
+			// Form submit event
+			form.addEventListener("submit", async function(event) {
+			
+				// Tor proxy
+				const TOR_PROXY = "https://mwcwallet.com/tor/";
+				
+				// MQS server
+				const MQS_SERVER = "https://mqs.mwc.mw:443";
+				
+				// Prevent default
+				event.preventDefault();
+				
+				// Disable button
+				button["disabled"] = true;
+				
+				// Loop while alerts has an alert
+				while(alerts["firstChild"] !== null) {
+				
+					// Remove alert from alerts
+					alerts.removeChild(alerts["firstChild"]);
+				}
+				
+				// Try
+				try {
+				
+					// Get input values
+					const address = document.querySelector("input[name=\"address\"]")["value"];
+					
+					// Check if address is an Onion Service
+					if(/^([abcdefghijklmnopqrstuvwxyz234567]{56})|((https?:\/\/)?[abcdefghijklmnopqrstuvwxyz234567]{56}\.onion(\/.*)?)$/.test(address) === true) {
+					
+						// Create request
+						const request = new XMLHttpRequest();
+						
+						// Wait for promise to finish
+						await new Promise(function(resolve) {
+						
+							// Configure request
+							request.open("POST", TOR_PROXY + ((/^[abcdefghijklmnopqrstuvwxyz234567]{56}$/.test(address) === true) ? "http://" + address + ".onion" : (((/^https?:\/\//.test(address) === false) ? "http://" : "") + address)) + "/v2/foreign");
+							request.setRequestHeader("Content-Type", "application/json");
+							request["responseType"] = "json";
+							
+							// Request ready state change event
+							request.addEventListener("readystatechange", function() {
+							
+								// Check if request is done
+								if(request["readyState"] === XMLHttpRequest["DONE"]) {
+								
+									// Resolve
+									resolve();
+								}
+							});
+							
+							// Send request
+							request.send(JSON.stringify({
+							
+								// JSON-RPC version
+								"jsonrpc": "2.0",
+								
+								// ID
+								"id": 1,
+								
+								// Method
+								"method": "check_version",
+								
+								// Parameters
+								"params": []
+							}));
+						});
+						
+						// Check if connecting to the address failed
+						if(request["status"] === 0) {
+						
+							// Throw error
+							throw "Unable to connect to the address. This may have been caused by CORS restrictions if you didn't disable your web browser's CORS restrictions. You can check if this was caused by CORS restrictions in your web browser's developer tools.";
+						}
+						
+						// Check if response didn't have a success status code
+						if(request["status"] !== 200) {
+						
+							// Throw error
+							throw "Received unsuccessful status code from the address: " + request["status"].toFixed() + ".";
+						}
+						
+						// Check if response doesn't contain a success JSON-RPC response
+						if(typeof request["response"] !== "object" || request["response"] === null || "result" in request["response"] === false || typeof request["response"]["result"] !== "object" || request["response"]["result"] === null || "Ok" in request["response"]["result"] === false || typeof request["response"]["result"]["Ok"] !== "object" || request["response"]["result"]["Ok"] === null || "foreign_api_version" in request["response"]["result"]["Ok"] === false || typeof request["response"]["result"]["Ok"]["foreign_api_version"] !== "number" || "supported_slate_versions" in request["response"]["result"]["Ok"] === false || Array.isArray(request["response"]["result"]["Ok"]["supported_slate_versions"]) === false) {
+						
+							// Throw error
+							throw "Received unsuccessful JSON-RPC response from the address: " + JSON.stringify(request["response"]) + ".";
+						}
+						
+						// Add alert
+						addAlert("Received response from the wallet.");
+						
+						// Add alert
+						addAlert("The wallet's foreign API version is: " + request["response"]["result"]["Ok"]["foreign_api_version"].toFixed() + ".");
+						
+						// Add alert
+						addAlert("The wallet's supported slate versions are: " + request["response"]["result"]["Ok"]["supported_slate_versions"].join(", ") + ".");
+					}
+					
+					// Otherwise check if address is an MQS address
+					else if(/^(mwcmqs:\/\/)?[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{52}$/.test(address) === true) {
+					
+						// Create private key
+						const privateKey = new Uint8Array(32);
+						
+						// Loop forever
+						while(true) {
+						
+							// Fill private key with random values
+							crypto.getRandomValues(privateKey);
+							
+							// Check if getting if private key is a valid secret key failed
+							const isValid = Secp256k1Zkp.isValidSecretKey(privateKey);
+							if(isValid === Secp256k1Zkp.OPERATION_FAILED) {
+							
+								// Throw error
+								throw "Getting if private key is a valid secret key failed.";
+							}
+							
+							// Check if private key is a valid secret key
+							if(isValid === true) {
+							
+								// Break
+								break;
+							}
+							
+						}
+						
+						// Check if getting private key's public key failed
+						const publicKey = Secp256k1Zkp.publicKeyFromSecretKey(privateKey);
+						if(publicKey === Secp256k1Zkp.OPERATION_FAILED) {
+						
+							// Throw error
+							throw "Getting private key's public key failed.";
+						}
+						
+						// Check if creating shared private key failed
+						const sharedPrivateKey = Secp256k1Zkp.publicKeyTweakMultiply(mqsAddressToPublicKey((/^mwcmqs:\/\//.test(address) === true) ? address.substr("mwcmqs://"["length"]) : address), privateKey);
+						if(sharedPrivateKey === Secp256k1Zkp.OPERATION_FAILED) {
+						
+							// Throw error
+							throw "Creating shared private key failed.";
+						}
+						
+						// Create base key from shared private key
+						const baseKey = await crypto["subtle"].importKey("raw", sharedPrivateKey.subarray(1), {
+					
+							// Name
+							"name": "PBKDF2"
+						
+						}, false, [
+						
+							// Derive key
+							"deriveKey"
+						]);
+						
+						// Create random salt
+						const salt = crypto.getRandomValues(new Uint8Array(8));
+						
+						// Derive key from base key
+						const derivedKey = await crypto["subtle"].deriveKey({
+						
+							// Name
+							"name": "PBKDF2",
+							
+							// Salt
+							"salt": salt,
+							
+							// Iterations
+							"iterations": 100,
+							
+							// Hash
+							"hash": "SHA-512"
+							
+						}, baseKey, {
+						
+							// Name
+							"name": "AES-GCM",
+							
+							// Length
+							"length": 256
+							
+						}, true, [
+						
+							// Encrypt
+							"encrypt",
+							
+							// Decrypt
+							"decrypt"
+						]);
+						
+						// Export the raw key
+						const rawKey = new Uint8Array(await crypto["subtle"].exportKey("raw", derivedKey));
+						
+						// Create random nonce
+						const nonce = crypto.getRandomValues(new Uint8Array(12));
+						
+						// Create cipher from raw key and nonce
+						const cipher = chacha.createCipher(rawKey, nonce);
+						
+						// Set cipher's AAD
+						cipher.setAAD(new Uint8Array([]));
+						
+						// Create note
+						const note = "This is a fake transaction that will never be confirmed. Remember to cancel it.";
+						
+						// Check if getting note's hash failed
+						const noteHash = Blake2b.compute(32, (new TextEncoder()).encode(note), new Uint8Array([]));
+						if(noteHash === Blake2b.OPERATION_FAILED) {
+						
+							// Throw error
+							throw "Getting note's hash failed.";
+						}
+						
+						// Check if signing note's hash with private key failed
+						const noteSignature = Secp256k1Zkp.createSingleSignerSignature(noteHash, privateKey, Secp256k1Zkp.NO_SECRET_NONCE, publicKey, Secp256k1Zkp.NO_PUBLIC_NONCE, Secp256k1Zkp.NO_PUBLIC_NONCE_TOTAL);
+						if(noteSignature === Secp256k1Zkp.OPERATION_FAILED) {
+						
+							// Throw error
+							throw "Signing note's hash with private key failed.";
+						}
+						
+						// Encrypt data with the cipher
+						let encryptedData = cipher.update((new TextEncoder()).encode(JSON.stringify({
+						
+							// Amount
+							"amount": "123456789",
+							
+							// Fee
+							"fee": "8000000",
+							
+							// Height
+							"height": "202500",
+							
+							// ID
+							"id": toHexString(crypto.getRandomValues(new Uint8Array(4))) + "-2b02-624c-2032-570501212b00",
+							
+							// Lock height
+							"lock_height": "0",
+							
+							// Number of participants
+							"num_participants": 2,
+							
+							// Participant data
+							"participant_data": [
+								{
+								
+									// ID
+									"id": "0",
+									
+									// Message
+									"message": note,
+									
+									// Message signature
+									"message_sig": toHexString(noteSignature),
+									
+									// Partial signature
+									"part_sig": null,
+									
+									// Public blind excess
+									"public_blind_excess": "034b4df2f0558b73ea72a1ca5c4ab20217c66bbe0829056fca7abe76888e9349ee",
+									
+									// Public nonce
+									"public_nonce": toHexString(publicKey)
+								}
+							],
+							
+							// Transaction
+							"tx": {
+							
+								// Body
+								"body": {
+								
+									// Inputs
+									"inputs": [
+										{
+											// Commitment
+											"commit": "08e1da9e6dc4d6e808a718b2f110a991dd775d65ce5ae408a4e1f002a4961aa9e7",
+											
+											// Features
+											"features": "Coinbase"
+										}
+									],
+									
+									// Kernels
+									"kernels": [
+										{
+										
+											// Excess
+											"excess": "000000000000000000000000000000000000000000000000000000000000000000",
+											
+											// Excess signature
+											"excess_sig": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+											
+											// Features
+											"features": "Plain",
+											
+											// Fee
+											"fee": "8000000",
+											
+											// Lock height
+											"lock_height": "0"
+										}
+									],
+									
+									// Outputs
+									"outputs": []
+								},
+								
+								// Offset
+								"offset": "d202964900000000d302964900000000d402964900000000d502964900000000"
+							},
+							
+							// Version info
+							"version_info": {
+							
+								// Block header version
+								"block_header_version": 2,
+								
+								// Original version
+								"orig_version": 2,
+								
+								// Version
+								"version": 2
+							}
+						})));
+						
+						// Finish encrypting data
+						encryptedData = mergeArrays([
+						
+							// Encrypted data
+							encryptedData,
+							
+							// Finish encrypting data
+							cipher.final()
+						]);
+						
+						// Get tag from the cipher
+						const tag = cipher.getAuthTag();
+						
+						// Append tag to the encrypted data
+						encryptedData = mergeArrays([
+						
+							// Encrypted data
+							encryptedData,
+							
+							// Tag
+							tag
+						]);
+						
+						// Create message
+						const message = JSON.stringify({
+						
+							// Destination
+							"destination": {
+							
+								// Public key
+								"public_key": (/^mwcmqs:\/\//.test(address) === true) ? address.substr("mwcmqs://"["length"]) : address,
+								
+								// Domain
+								"domain": "",
+								
+								// Port
+								"port": null
+							},
+							
+							// Nonce
+							"nonce": toHexString(nonce),
+							
+							// Salt
+							"salt": toHexString(salt),
+							
+							// Encrypted message
+							"encrypted_message": toHexString(encryptedData)
+						});
+						
+						// Check if signing message with private key failed
+						const messageSignature = Secp256k1Zkp.createMessageHashSignature(new Uint8Array(sha256.arrayBuffer((new TextEncoder()).encode(message))), privateKey);
+						if(messageSignature === Secp256k1Zkp.OPERATION_FAILED) {
+						
+							// Throw error
+							throw "Signing message with private key failed.";
+						}
+						
+						// Get MQS address from public key
+						const mqsAddress = publicKeyToMqsAddress(publicKey);
+						
+						// Create request
+						const request = new XMLHttpRequest();
+						
+						// Wait for promise to finish
+						await new Promise(function(resolve) {
+							
+							// Configure request
+							request.open("POST", MQS_SERVER + "/sender?address=" + ((/^mwcmqs:\/\//.test(address) === true) ? address.substr("mwcmqs://"["length"]) : address));
+							request.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+							request["responseType"] = "text";
+							
+							// Request ready state change event
+							request.addEventListener("readystatechange", function() {
+							
+								// Check if request is done
+								if(request["readyState"] === XMLHttpRequest["DONE"]) {
+								
+									// Resolve
+									resolve();
+								}
+							});
+							
+							// Send request
+							request.send("mapmessage=" + encodeURIComponent(message) + "&from=" + mqsAddress + "&signature=" + toHexString(messageSignature));
+						});
+						
+						// Check if connecting to the MQS server failed
+						if(request["status"] === 0) {
+						
+							// Throw error
+							throw "Unable to connect to the MQS server. This may have been caused by CORS restrictions if you didn't disable your web browser's CORS restrictions. You can check if this was caused by CORS restrictions in your web browser's developer tools.";
+						}
+						
+						// Check if response didn't have a success status code
+						if(request["status"] !== 200) {
+						
+							// Throw error
+							throw "Received unsuccessful status code from the MQS server: " + request["status"].toFixed() + ".";
+						}
+						
+						// Add alert
+						addAlert("Sent message to the MQS server. Waiting for the wallet's response…");
+						
+						// Go through one minutes worth of polling attempts
+						for(let i = 0; i < 60 / 5; ++i) {
+						
+							// Try
+							let timestamp;
+							try {
+							
+								// Get timestamp from the MQS server
+								timestamp = await fetch(MQS_SERVER + "/timenow?address=" + mqsAddress);
+							}
+							
+							// Catch errors
+							catch(error) {
+							
+								// Throw error
+								throw "Getting timestamp from the MQS server failed.";
+							}
+							
+							// Check if timestamp didn't have a success status code
+							if(timestamp["status"] !== 200) {
+							
+								// Throw error
+								throw "Received unsuccessful status code from the MQS server: " + timestamp["status"].toFixed() + ".";
+							}
+							
+							// Get timestamp in correct format
+							timestamp = await timestamp.text();
+							
+							// Check if signing timestamp with private key failed
+							const timestampSignature = Secp256k1Zkp.createMessageHashSignature(new Uint8Array(sha256.arrayBuffer((new TextEncoder()).encode(timestamp))), privateKey);
+							if(timestampSignature === Secp256k1Zkp.OPERATION_FAILED) {
+							
+								// Throw error
+								throw "Signing timestamp with private key failed.";
+							}
+							
+							// Try
+							let messages;
+							try {
+							
+								// Get messages from the MQS server
+								messages = await fetch(MQS_SERVER + "/listener?address=" + mqsAddress + "&signature=" + toHexString(timestampSignature) + "&time_now=" + timestamp + "&delTo=nil&first=true");
+							}
+							
+							// Catch errors
+							catch(error) {
+							
+								// Throw error
+								throw "Getting messages from the MQS server failed.";
+							}
+							
+							// Check if messages didn't have a success status code
+							if(messages["status"] !== 200) {
+							
+								// Throw error
+								throw "Received unsuccessful status code from the MQS server: " + messages["status"].toFixed() + ".";
+							}
+							
+							// Check if a message exists
+							if((await messages.text()).indexOf("messagelist: 1") !== -1) {
+							
+								// Add alert
+								addAlert("Received response from the wallet.");
+								
+								// Break
+								break;
+							}
+							
+							// Check if a minute has passed
+							if(i === 60 / 5 - 1) {
+							
+								// Throw error
+								throw "Waiting for a response from the wallet timed out.";
+							}
+							
+							// Wait five seconds
+							await new Promise(function(resolve) {
+							
+								// Set timeout
+								setTimeout(function() {
+								
+									// Resolve
+									resolve();
+									
+								}, 5 * 1000);
+							});
+						}
+					}
+					
+					// Otherwise check if address is an HTTP address
+					else if(/^(https?:\/\/)?.+$/.test(address) === true) {
+					
+						// Create request
+						const request = new XMLHttpRequest();
+						
+						// Wait for promise to finish
+						await new Promise(function(resolve) {
+						
+							// Configure request
+							request.open("POST", ((/^https?:\/\//.test(address) === false) ? "http://" : "") + address + "/v2/foreign");
+							request.setRequestHeader("Content-Type", "application/json");
+							request["responseType"] = "json";
+							
+							// Request ready state change event
+							request.addEventListener("readystatechange", function() {
+							
+								// Check if request is done
+								if(request["readyState"] === XMLHttpRequest["DONE"]) {
+								
+									// Resolve
+									resolve();
+								}
+							});
+							
+							// Send request
+							request.send(JSON.stringify({
+							
+								// JSON-RPC version
+								"jsonrpc": "2.0",
+								
+								// ID
+								"id": 1,
+								
+								// Method
+								"method": "check_version",
+								
+								// Parameters
+								"params": []
+							}));
+						});
+						
+						// Check if connecting to the address failed
+						if(request["status"] === 0) {
+						
+							// Throw error
+							throw "Unable to connect to the address. This may have been caused by CORS restrictions if you didn't disable your web browser's CORS restrictions. You can check if this was caused by CORS restrictions in your web browser's developer tools.";
+						}
+						
+						// Check if response didn't have a success status code
+						if(request["status"] !== 200) {
+						
+							// Throw error
+							throw "Received unsuccessful status code from the address: " + request["status"].toFixed() + ".";
+						}
+						
+						// Check if response doesn't contain a success JSON-RPC response
+						if(typeof request["response"] !== "object" || request["response"] === null || "result" in request["response"] === false || typeof request["response"]["result"] !== "object" || request["response"]["result"] === null || "Ok" in request["response"]["result"] === false || typeof request["response"]["result"]["Ok"] !== "object" || request["response"]["result"]["Ok"] === null || "foreign_api_version" in request["response"]["result"]["Ok"] === false || typeof request["response"]["result"]["Ok"]["foreign_api_version"] !== "number" || "supported_slate_versions" in request["response"]["result"]["Ok"] === false || Array.isArray(request["response"]["result"]["Ok"]["supported_slate_versions"]) === false) {
+						
+							// Throw error
+							throw "Received unsuccessful JSON-RPC response from the address: " + JSON.stringify(request["response"]) + ".";
+						}
+						
+						// Add alert
+						addAlert("Received response from the wallet.");
+						
+						// Add alert
+						addAlert("The wallet's foreign API version is: " + request["response"]["result"]["Ok"]["foreign_api_version"].toFixed() + ".");
+						
+						// Add alert
+						addAlert("The wallet's supported slate versions are: " + request["response"]["result"]["Ok"]["supported_slate_versions"].join(", ") + ".");
+					}
+					
+					// Otherwise
+					else {
+					
+						// Throw error
+						throw "Invalid address.";
+					}
+					
+					// Add alert
+					addAlert("The address is reachable.");
+					
+					// Add alert
+					addAlert("Testing the address was successful.");
+				}
+				
+				// Catch errors
+				catch(error) {
+				
+					// Add alert
+					addAlert(error);
+					
+					// Add alert
+					addAlert("Testing the address failed.");
+				}
+				
+				// Enable button
+				button["disabled"] = false;
+			});
+			
+			// Bits in a byte
+			const BITS_IN_A_BYTE = 8;
+			
+			// Read uint32 little endian
+			Uint8Array["prototype"].readUInt32LE = function(index) {
+			
+				// Return value at index as a uint32 in little endian
+				return this[index] | (this[index + 1] << BITS_IN_A_BYTE) | (this[index + 2] << (BITS_IN_A_BYTE * 2)) | (this[index + 3] << (BITS_IN_A_BYTE * 3));
+			};
+			
+			// Read uint16 little endian
+			Uint8Array["prototype"].readUInt16LE = function(index) {
+			
+				// Return value at index as a uint16 in little endian
+				return this[index] | (this[index + 1] << BITS_IN_A_BYTE);
+			};
+			
+			// Loop while alerts has an alert
+			while(alerts["firstChild"] !== null) {
+			
+				// Remove alert from alerts
+				alerts.removeChild(alerts["firstChild"]);
+			}
+			
+			// Add alert
+			addAlert("Ready.");
+			
+			// Enable button
+			button["disabled"] = false;
+		});
+		
+		
+		// Supporting function implementation
+		
+		// Add alert
+		function addAlert(text) {
+		
+			// Get alerts
+			const alerts = document.querySelector("div");
+		
+			// Create alert
+			const alert = document.createElement("p");
+			
+			// Add alert to alerts
+			alerts.appendChild(alert);
+			
+			// Set alert's text
+			alert["textContent"] = text;
+		}
+		
+		// Merge arrays
+		function mergeArrays(arrays) {
+		
+			// Initialize result
+			let result = new Uint8Array([]);
+		
+			// Go through all arrays
+			for(let i = 0; i < arrays["length"]; ++i) {
+			
+				// Get array
+				const array = arrays[i];
+				
+				// Set updated result to be the length of the current result and the array
+				const updatedResult = new Uint8Array(result["length"] + array["length"]);
+				
+				// Set arrays in the updated result
+				updatedResult.set(result);
+				updatedResult.set(array, result["length"]);
+				
+				// Set result to the updated result
+				result = updatedResult;
+			}
+		
+			// Return result
+			return result;
+		}
+		
+		// To hex string
+		function toHexString(byteArray) {
+		
+			// Value to hex character
+			const VALUE_TO_HEX_CHARACTER = [
+			
+				// Zero
+				"0",
+				
+				// One
+				"1",
+				
+				// Two
+				"2",
+				
+				// Three
+				"3",
+				
+				// Four
+				"4",
+				
+				// Five
+				"5",
+				
+				// Six
+				"6",
+				
+				// Seven
+				"7",
+				
+				// Eight
+				"8",
+				
+				// Nine
+				"9",
+				
+				// A
+				"a",
+				
+				// B
+				"b",
+				
+				// C
+				"c",
+				
+				// D
+				"d",
+				
+				// E
+				"e",
+				
+				// F
+				"f"
+			];
+			
+			// Bits in a byte
+			const BITS_IN_A_BYTE = 8;
+			
+			// Initialize result
+			let result = "";
+			
+			// Go through all bytes in the byte array
+			for(let i = 0; i < byteArray["length"]; ++i) {
+			
+				// Get byte
+				const byte = byteArray[i];
+				
+				// Append byte as characters to the result
+				result = result.concat(VALUE_TO_HEX_CHARACTER[byte >>> (BITS_IN_A_BYTE / 2)], VALUE_TO_HEX_CHARACTER[byte & 0x0F]);
+			}
+			
+			// Return result
+			return result;
+		}
+		
+		// Public key to MQS address
+		function publicKeyToMqsAddress(publicKey) {
+		
+			// MQS address version
+			const MQS_ADDRESS_VERSION = [1, 69];
+			
+			// Return encoding the MQS address version and public key
+			return Base58.encodeWithChecksum(mergeArrays([
+			
+				// MQS address version
+				MQS_ADDRESS_VERSION,
+				
+				// Public key
+				publicKey
+			]));
+		}
+		
+		// MQS address to public key
+		function mqsAddressToPublicKey(mqsAddress) {
+		
+			// MQS address version
+			const MQS_ADDRESS_VERSION = [1, 69];
+			
+			// Secp256k1 public key length
+			const SECP256K1_PUBLIC_KEY_LENGTH = 33;
+			
+			// Decode MQS address
+			const decodedAddress = Base58.decodeWithChecksum(mqsAddress);
+			
+			// Check if decoded address's length is invalid
+			if(decodedAddress["length"] !== MQS_ADDRESS_VERSION["length"] + SECP256K1_PUBLIC_KEY_LENGTH) {
+			
+				// Throw error
+				throw "Invalid MQS address.";
+			}
+			
+			// Go through all bytes in the decoded address's version
+			for(let i = 0; i < MQS_ADDRESS_VERSION["length"]; ++i) {
+			
+				// Check if byte is invalid
+				if(decodedAddress[i] !== MQS_ADDRESS_VERSION[i]) {
+				
+					// Throw error
+					throw "Invalid MQS address.";
+				}
+			}
+			
+			// Check if decoded address's secp256k1 public key is invalid
+			if(Secp256k1Zkp.isValidPublicKey(decodedAddress.subarray(MQS_ADDRESS_VERSION["length"])) !== true) {
+			
+				// Throw error
+				throw "Invalid MQS address.";
+			}
+			
+			// Return decoded address's secp256k1 public key
+			return decodedAddress.subarray(MQS_ADDRESS_VERSION["length"]);
+		}
+	</script>
+</head>
+<body>
+	<h3>MimbleWimble Coin Address Tester</h3>
+	<p><a href="https://github.com/NicolasFlamel1/MimbleWimble-Coin-Address-Tester#mimblewimble-coin-address-tester" target="_blank">Disabling your web browser's CORS restrictions</a> is required for this utility to successfully test addresses that don't provide responses with CORS headers.</p>
+	<form>
+		<label for="address">Address:</label>
+		<input type="text" size="175" id="address" name="address" pattern="([abcdefghijklmnopqrstuvwxyz234567]{56})|((https?:\/\/)?[abcdefghijklmnopqrstuvwxyz234567]{56}\.onion(\/.*)?)|((mwcmqs:\/\/)?[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{52})|((https?:\/\/)?.+)" required value="https://mwcwallet.com/donate/mwc">
+		<br>
+		<br>
+		<button disabled>Test Address</button>
+	</form>
+	<div>
+		<p>Loading…</p>
+	</div>
+</body>
+</html>
