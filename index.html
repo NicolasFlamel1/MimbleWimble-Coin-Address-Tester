@@ -107,7 +107,7 @@
 						if(request["status"] === 0) {
 						
 							// Throw error
-							throw "Unable to connect to the address. This may have been caused by CORS restrictions if you didn't disable your web browser's CORS restrictions. You can check if this was caused by CORS restrictions in your web browser's developer tools.";
+							throw "Unable to connect to the address. This may have been caused by CORS restrictions and/or mixed-content restrictions if you didn't disable them in your web browser. You can check if this was caused by CORS restrictions and/or mixed-content restrictions in your web browser's developer tools.";
 						}
 						
 						// Check if response didn't have a success status code
@@ -452,7 +452,7 @@
 						if(request["status"] === 0) {
 						
 							// Throw error
-							throw "Unable to connect to the MQS server. This may have been caused by CORS restrictions if you didn't disable your web browser's CORS restrictions. You can check if this was caused by CORS restrictions in your web browser's developer tools.";
+							throw "Unable to connect to the MQS server. This may have been caused by CORS restrictions and/or mixed-content restrictions if you didn't disable them in your web browser. You can check if this was caused by CORS restrictions and/or mixed-content restrictions in your web browser's developer tools.";
 						}
 						
 						// Check if response didn't have a success status code
@@ -600,7 +600,7 @@
 						if(request["status"] === 0) {
 						
 							// Throw error
-							throw "Unable to connect to the address. This may have been caused by CORS restrictions if you didn't disable your web browser's CORS restrictions. You can check if this was caused by CORS restrictions in your web browser's developer tools.";
+							throw "Unable to connect to the address. This may have been caused by CORS restrictions and/or mixed-content restrictions if you didn't disable them in your web browser. You can check if this was caused by CORS restrictions and/or mixed-content restrictions in your web browser's developer tools.";
 						}
 						
 						// Check if response didn't have a success status code
@@ -868,7 +868,6 @@
 </head>
 <body>
 	<h3>MimbleWimble Coin Address Tester</h3>
-	<p>Disabling your web browser's CORS restrictions is required for this utility to successfully test addresses that don't provide responses with CORS headers.</p>
 	<form>
 		<label for="address">Address:</label>
 		<input type="text" size="175" id="address" name="address" pattern="([abcdefghijklmnopqrstuvwxyz234567]{56})|((https?:\/\/)?[abcdefghijklmnopqrstuvwxyz234567]{56}\.onion(\/.*)?)|((mwcmqs:\/\/)?[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{52})|((https?:\/\/)?.+)" required value="https://mwcwallet.com/donate/mwc">
