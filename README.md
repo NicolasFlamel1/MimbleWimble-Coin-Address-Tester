@@ -11,7 +11,7 @@ On **Windows** you can open Chrome with its CORS restrictions disabled by runnin
 On **macOS** you can open Chrome with its CORS restrictions disabled by running the following command in a terminal: 
 ```
 open -n -a "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --args --user-data-dir="/tmp/chrome_test" --disable-web-security
-
+```
 On **Linux** you can open Chrome with its CORS restrictions disabled by running the following command in a terminal: 
 ```
 google-chrome --user-data-dir="/tmp/chrome_test" --disable-web-security
