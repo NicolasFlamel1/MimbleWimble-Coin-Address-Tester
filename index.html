@@ -33,6 +33,9 @@
 			// Get button
 			const button = document.querySelector("button");
 			
+			// Get iframe
+			const iframe = document.querySelector("iframe");
+			
 			// Form submit event
 			form.addEventListener("submit", async function(event) {
 			
@@ -64,43 +67,26 @@
 					// Check if address is an Onion Service
 					if(/^([abcdefghijklmnopqrstuvwxyz234567]{56})|((https?:\/\/)?[abcdefghijklmnopqrstuvwxyz234567]{56}\.onion(\/.*)?)$/.test(address) === true) {
 					
-						// Create request
-						const request = new XMLHttpRequest();
-						
 						// Wait for promise to finish
+						let request;
 						await new Promise(function(resolve) {
 						
-							// Configure request
-							request.open("POST", TOR_PROXY + ((/^[abcdefghijklmnopqrstuvwxyz234567]{56}$/.test(address) === true) ? "http://" + address + ".onion" : (((/^https?:\/\//.test(address) === false) ? "http://" : "") + address)) + "/v2/foreign");
-							request.setRequestHeader("Content-Type", "application/json");
-							request["responseType"] = "json";
+							// Window message event
+							window.addEventListener("message", function(event) {
 							
-							// Request ready state change event
-							request.addEventListener("readystatechange", function() {
-							
-								// Check if request is done
-								if(request["readyState"] === XMLHttpRequest["DONE"]) {
+								// Set request to the message
+								request = event["data"];
 								
-									// Resolve
-									resolve();
-								}
+								// Resolve
+								resolve();
+							}, {
+							
+								// Once
+								"once": true
 							});
 							
-							// Send request
-							request.send(JSON.stringify({
-							
-								// JSON-RPC version
-								"jsonrpc": "2.0",
-								
-								// ID
-								"id": 1,
-								
-								// Method
-								"method": "check_version",
-								
-								// Parameters
-								"params": []
-							}));
+							// Send message to iframe
+							iframe.contentWindow.postMessage(TOR_PROXY + ((/^[abcdefghijklmnopqrstuvwxyz234567]{56}$/.test(address) === true) ? "http://" + address + ".onion" : (((/^https?:\/\//.test(address) === false) ? "http://" : "") + address)) + "/v2/foreign", "*");
 						});
 						
 						// Check if connecting to the address failed
@@ -871,7 +857,7 @@
 	<p>It's recommended that you use this utility with your web browser's CORS restrictions and mixed-content restrictions disabled so that it can successfully test addresses that don't provide responses with CORS headers and addresses that use insecure protocols.</p>
 	<form>
 		<label for="address">Address:</label>
-		<input type="text" size="175" id="address" name="address" pattern="([abcdefghijklmnopqrstuvwxyz234567]{56})|((https?:\/\/)?[abcdefghijklmnopqrstuvwxyz234567]{56}\.onion(\/.*)?)|((mwcmqs:\/\/)?[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{52})|((https?:\/\/)?.+)" required value="https://mwcwallet.com/donate/mwc">
+		<input type="text" size="175" id="address" name="address" pattern="([abcdefghijklmnopqrstuvwxyz234567]{56})|((https?:\/\/)?[abcdefghijklmnopqrstuvwxyz234567]{56}\.onion(\/.*)?)|((mwcmqs:\/\/)?[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{52})|((https?:\/\/)?.+)" required value="http://mwcwalletmiq3gdkmfbqlytxunvlxyli4m6zrqozk7xjc353ewqb6bad.onion/donate/mwc">
 		<br>
 		<br>
 		<button disabled>Test Address</button>
@@ -879,5 +865,66 @@
 	<div>
 		<p>Loading…</p>
 	</div>
+	
+	<iframe height="0" width="0" frameborder="0" sandbox="allow-scripts" srcdoc='
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<meta charset="UTF-8">
+			
+			<script>
+			
+				// Window message event
+				window.addEventListener("message", function(event) {
+				
+					// Create request
+					const request = new XMLHttpRequest();
+					
+					// Configure request
+					request.open("POST", event["data"]);
+					request.setRequestHeader("Content-Type", "application/json");
+					request["responseType"] = "json";
+					
+					// Request ready state change event
+					request.addEventListener("readystatechange", function() {
+					
+						// Check if request is done
+						if(request["readyState"] === XMLHttpRequest["DONE"]) {
+						
+							// Send message to parent
+							parent.postMessage({
+							
+								// Status
+								"status": request["status"],
+								
+								// Response
+								"response": request["response"]
+								
+							}, "*");
+						}
+					});
+					
+					// Send request
+					request.send(JSON.stringify({
+					
+						// JSON-RPC version
+						"jsonrpc": "2.0",
+						
+						// ID
+						"id": 1,
+						
+						// Method
+						"method": "check_version",
+						
+						// Parameters
+						"params": []
+					}));
+				});
+			</script>
+		</head>
+		<body>
+		</body>
+		</html>
+	'>
 </body>
 </html>
