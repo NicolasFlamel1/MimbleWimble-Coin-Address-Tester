@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	
+	<script>
+	
+		// Window message event
+		window.addEventListener("message", function(event) {
+		
+			// Create request
+			const request = new XMLHttpRequest();
+			
+			// Configure request
+			request.open("POST", event["data"]);
+			request.setRequestHeader("Content-Type", "application/json");
+			request["responseType"] = "json";
+			
+			// Request ready state change event
+			request.addEventListener("readystatechange", function() {
+			
+				// Check if request is done
+				if(request["readyState"] === XMLHttpRequest["DONE"]) {
+				
+					// Send message to parent
+					parent.postMessage({
+					
+						// Status
+						"status": request["status"],
+						
+						// Response
+						"response": request["response"]
+						
+					}, "*");
+				}
+			});
+			
+			// Send request
+			request.send(JSON.stringify({
+			
+				// JSON-RPC version
+				"jsonrpc": "2.0",
+				
+				// ID
+				"id": 1,
+				
+				// Method
+				"method": "check_version",
+				
+				// Parameters
+				"params": []
+			}));
+		});
+	</script>
+</head>
+<body>
+</body>
+</html>
